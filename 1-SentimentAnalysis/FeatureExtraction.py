@@ -1,8 +1,11 @@
-import spacy
+import nltk
+from nltk.stem import WordNetLemmatizer
 import csv
 from collections import Counter
 import re
 
+nltk.download('wordnet')
+lemmatizer = WordNetLemmatizer()
 stopwords = ['i', 'me', 'my', 'myself', 'we', 'our', 'of',
              'ours', 'ourselves', 'you', 'your', 'yours',
              'yourself', 'yourselves', 'he', 'him', 'his',
@@ -38,36 +41,32 @@ def read_tsv(file_path):
 
 def data_cleaning(data_map):
     clean_data = {}
-    nlp = spacy.load('en_core_web_sm')
     for key, value in data_map.items():
         phrase, label, ph_len = value
         words = phrase.lower().split()
         meaningful_words = [word for word in words if word not in stopwords]
-        meaningful_phrase = " ".join(meaningful_words)
-        doc = nlp(meaningful_phrase)
-        lemma_phrase = ""
-        for token in doc:
-            lemma_phrase += token.lemma_ + " "
-        clean_data[key] = (lemma_phrase, label)
+        lemma_list = list(map(lemmatizer.lemmatize, meaningful_words))
+        clean_data[key] = (lemma_list, label)
     return clean_data
 
 
 def build_vocab(clean_data):
     count_list = []
+    no_repeat_word_list = []
     document_count = Counter()
     for _, value in clean_data.items():
-        lemma_phrase, label = value
-        word_list = lemma_phrase.split()
-        counter = Counter(word_list)
+        lemma_list, label = value
+        counter = Counter(lemma_list)
         count_list.append(counter)
-        word_set = set(word_list)
-        word_list = list(word_set)
+        word_list = list(set(lemma_list))
+        no_repeat_word_list.append(word_list)
         for word in word_list:
             document_count[word] += 1
+    return no_repeat_word_list, count_list, document_count
 
 if __name__ == "__main__":
     # raw_review = "afsdfas asdfawef asda?as"
     # letters_only = re.sub('[^a-zA-Z]', ' ', raw_review)
     data_map = read_tsv("train.tsv")
     clean_data = data_cleaning(data_map)
-
+    no_repeat_word_list, count_list, document_count = build_vocab
