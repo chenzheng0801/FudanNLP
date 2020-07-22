@@ -86,7 +86,7 @@ class DataProcess:
             end_id = min(start_id + batch_size, doc_len)
             for i in range(start_id, end_id):
                 idx = i - start_id
-                batch_data[idx, list(doc_indicies[i])] = tf_idf_vecs[idx]
+                batch_data[idx, list(doc_indicies[i])] = tf_idf_vecs[i]
             # yield batch_data, one_hot[start_id:end_id]
             start_id += batch_size
 
