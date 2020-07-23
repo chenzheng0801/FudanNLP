@@ -87,7 +87,7 @@ class DataProcess:
             for i in range(start_id, end_id):
                 idx = i - start_id
                 batch_data[idx, list(doc_indicies[i])] = tf_idf_vecs[i]
-            # yield batch_data, one_hot[start_id:end_id]
+            yield batch_data, one_hot[start_id:end_id]
             start_id += batch_size
 
     def read_tsv(self, file_path):

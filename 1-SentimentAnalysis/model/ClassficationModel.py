@@ -2,13 +2,10 @@ import tensorflow as tf
 
 
 class LrModel:
-    def __init__(self, lr_config):
-        self.config = lr_config
-        self.logsitic_regression()
+    def __init__(self, seq_length, classes_num):
+        self.logsitic_regression(seq_length, classes_num)
 
-    def logsitic_regression(self):
-        seq_length = self.config.seq_length
-        classes_num = self.config.class_num
+    def logsitic_regression(self, seq_length, classes_num):
         self.x = tf.placeholder(tf.float32, [None, seq_length])
         W = tf.Variable(tf.random_normal([seq_length, classes_num]), name="weight")
         b = tf.Variable(tf.zeros([classes_num]), name="bias")
