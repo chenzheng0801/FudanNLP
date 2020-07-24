@@ -68,14 +68,16 @@ class DataProcess:
                 idf = math.log(doc_len / document_count[word])
                 tf_idf_vec.append(tf * idf)
             self.tf_idf_vecs.append(tf_idf_vec)
+        self.no_repeat_word_docs = no_repeat_word_docs
         self.doc_indicies = np.array(self.doc_indicies)
         self.tf_idf_vecs = np.array(self.tf_idf_vecs)
+        self.label_one_hot = np.array(self.label_one_hot)
 
-    def batch_iter(self, batch_size=32):
+    def batch_iter(self, batch_size):
         feature_dim = self.feature_dim
         batch_data = np.zeros([batch_size, feature_dim])
 
-        doc_len = len(self.doc_indicies)
+        doc_len = len(self.no_repeat_word_docs)
         indices = list(np.random.permutation(np.arange(doc_len)))
         doc_indicies = self.doc_indicies[indices]
         one_hot = self.label_one_hot[indices]
