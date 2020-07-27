@@ -71,7 +71,6 @@ class DataProcess:
         self.no_repeat_word_docs = no_repeat_word_docs
         self.doc_indicies = np.array(self.doc_indicies)
         self.tf_idf_vecs = np.array(self.tf_idf_vecs)
-        self.label_one_hot = np.array(self.label_one_hot)
 
     def batch_iter(self, batch_size):
         feature_dim = self.feature_dim
@@ -89,7 +88,7 @@ class DataProcess:
             for i in range(start_id, end_id):
                 idx = i - start_id
                 batch_data[idx, list(doc_indicies[i])] = tf_idf_vecs[i]
-            yield batch_data, one_hot[start_id:end_id]
+            yield batch_data[0:end_id-start_id], one_hot[start_id:end_id]
             start_id += batch_size
 
     def read_tsv(self, file_path):
@@ -143,7 +142,7 @@ class DataProcess:
         feature_words = list(feature_words)
         feature_encoder = label_encoder.fit(feature_words)
         return no_repeat_word_docs, counter_list, document_count,\
-               feature_encoder, one_hot_encoder.fit_transform(label_list), len(feature_words)
+               feature_encoder, one_hot_encoder.fit_transform(label_list).toarray(), len(feature_words)
 
 
 if __name__ == "__main__":

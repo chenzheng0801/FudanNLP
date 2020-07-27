@@ -15,10 +15,7 @@ def get_time_dif(start_time):
 def evaluate(sess, data_process, batch_size):
 
     batch = data_process.batch_iter(batch_size)
-    doc_len = len(data_process.no_repeat_word_docs)
-
-    total = int(round(doc_len/batch_size))
-
+    total = 0
     total_loss = 0
     total_acc = 0
     for batch_data, batch_one_hot in batch:
@@ -27,15 +24,15 @@ def evaluate(sess, data_process, batch_size):
                                              model.y_: batch_one_hot})
         total_acc += accuracy
         total_loss += loss
+        total += 1
     return total_acc/total, total_loss/total
 
 
-def train(model, data_process, epoch_num, batch_size=32):
-    last_imporoved = 0
+def train(model, data_process, epoch_num, batch_size=64):
     best_acc_val = 0.0
     start_time = time.time()
     total_batch = 0
-    saver = tf.train.Saver
+    saver = tf.train.Saver()
     print_per_batch = 100
 
     with tf.Session() as sess:
@@ -47,7 +44,7 @@ def train(model, data_process, epoch_num, batch_size=32):
                     accuracy, loss = evaluate(sess, data_process, batch_size)
                     if accuracy > best_acc_val:
                         best_acc_val = accuracy
-                        saver.save("model.ckpt")
+                        saver.save(sess, "./model.ckpt")
                     time_dif = get_time_dif(start_time)
                     print("")
                     print(time_dif)
