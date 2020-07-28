@@ -92,7 +92,7 @@ class DataProcess:
             start_id += batch_size
 
     def read_tsv(self, file_path):
-        csv.register_dialect("mydialect", delimiter='\t', quoting=csv.QUOTE_ALL)
+        csv.register_dialect("mydialect", delimpreprocessingiter='\t', quoting=csv.QUOTE_ALL)
         data_map = {}
         with open(file_path,) as csvfile:
             data = csv.reader(csvfile, 'mydialect')

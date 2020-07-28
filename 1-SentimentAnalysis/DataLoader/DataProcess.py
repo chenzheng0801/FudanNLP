@@ -9,6 +9,7 @@ from sklearn.linear_model import LogisticRegression
 from collections import Counter
 from sklearn import preprocessing
 import math
+import pandas as pd
 
 stopwords = ['i', 'me', 'my', 'myself', 'we', 'our', 'of', "'s",
                  'ours', 'ourselves', 'you', 'your', 'yours', 'in', 'on',
@@ -23,25 +24,6 @@ stopwords = ['i', 'me', 'my', 'myself', 'we', 'our', 'of', "'s",
                  '-s', '-ly', '</s>', 's', ',,', ',,,', "``", "\"",
                  '\'\'', "\"\"", ":"]
 
-
-def read_tsv(file_path):
-    csv.register_dialect("mydialect", delimiter='\t', quoting=csv.QUOTE_ALL)
-    data_map = {}
-    with open(file_path, ) as csvfile:
-        data = csv.reader(csvfile, 'mydialect')
-        count = 0
-        for line in data:
-            if count > 0:
-                sent_id, phrase, label = line[1], line[2], line[3]
-                ph_len = len(phrase)
-                if sent_id not in data_map.keys():
-                    data_map[sent_id] = (phrase, label, ph_len)
-                else:
-                    t_phrase, t_label, t_len = data_map[sent_id]
-                    if ph_len > t_len:
-                        data_map[sent_id] = (phrase, label, ph_len)
-            count += 1
-    return data_map
 
 def get_wordnet_pos(treebank_tag):
     if treebank_tag.startswith('J'):
@@ -65,30 +47,54 @@ def lemmatize_sentence(sentence):
 
     return res
 
-def data_cleaning(data_map):
-    clean_data = {}
+
+def clean_data(file_path):
+    df = pd.read_csv(file_path, header=0, delimiter='\t')
+    sentiment_series = df['Sentiment']
+    phrase_series = df['Phrase']
+    sent_id_series = df['SentenceId']
+
+    data_map = {}
+    for i, phrase in phrase_series.items():
+        sentiment = sentiment_series.at[i]
+        sent_id = sent_id_series.at[i]
+
+        ph_len = len(phrase)
+        if sent_id not in data_map.keys():
+            data_map[sent_id] = (phrase, sentiment, ph_len)
+        else:
+            _, _, t_len = data_map[sent_id]
+            if ph_len > t_len:
+                data_map[sent_id] = (phrase, sentiment, ph_len)
+    text_list = []
+    label_list = []
     for key, value in data_map.items():
         phrase, label, ph_len = value
         tokens = lemmatize_sentence(phrase.lower())
         meaningful_tokens = [token for token in tokens if token not in stopwords]
-        clean_data[key] = (" ".join(meaningful_tokens), label)
-    return clean_data
+        text_list.append(" ".join(meaningful_tokens))
+        label_list.append(label)
+    return text_list, label_list
 
 
-data_map = read_tsv("train.tsv")
-clean_data = data_cleaning(data_map)
-count_vec = CountVectorizer()
+class FeatureExtraction:
+    def __init__(self, raw_docs, labels):
+        self.cont_vec = CountVectorizer()
+        self.cont_vec.fit(raw_docs)
+        self.one_hot_encoder = preprocessing.OneHotEncoder()
+        self.one_hot_encoder.fit(labels)
 
-lemma_list = []
-y_train = []
-for _, value in clean_data.items():
-    lemma_phrase, label = value
-    lemma_list.append(lemma_phrase)
-    y_train.append(label)
+    def batch_iter(self, label_list, text_list, bath_size):
+        X_train = self.cont_vec.transform(text_list).toarray()
+        Y_train = self.one_hot_encoder.transform(label_list).toarray()
+        txt_len = len(text_list)
+        indices = list(np.random.permutation(np.arange(txt_len)))
 
-x_count_train = count_vec.fit_transform(lemma_list)
-logist = LogisticRegression(penalty="none")
-logist.fit(x_count_train, y_train)
-x_test = x_count_train
-predicted = logist.predict(x_test)
-print(np.mean(predicted == y_train))
+        X_train = X_train[indices]
+        Y_train = Y_train[indices]
+
+
+text_list, label_list = clean_data("D:\\NLP_coding\\FudanNLP\\1-SentimentAnalysis\\train.tsv")
+hehe = FeatureExtraction(text_list,[[1],[2],[3],[4],[5]])
+hehe.batch_iter(label_list, text_list, bath_size=32)
+print("ffa")
