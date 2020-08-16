@@ -73,7 +73,7 @@ def clean_data(file_path):
         tokens = lemmatize_sentence(phrase.lower())
         meaningful_tokens = [token for token in tokens if token not in stopwords]
         text_list.append(" ".join(meaningful_tokens))
-        label_list.append(label)
+        label_list.append([label])
     return text_list, label_list
 
 
@@ -84,17 +84,30 @@ class FeatureExtraction:
         self.one_hot_encoder = preprocessing.OneHotEncoder()
         self.one_hot_encoder.fit(labels)
 
-    def batch_iter(self, label_list, text_list, bath_size):
-        X_train = self.cont_vec.transform(text_list).toarray()
-        Y_train = self.one_hot_encoder.transform(label_list).toarray()
+    def fit_y(self, label_list):
+        return self.one_hot_encoder.transform(label_list).toarray()
+
+    def fit_x(self, text_list):
+        return self.cont_vec.transform(text_list).toarray()
+
+    def batch_iter(self, label_list, text_list, batch_size):
+        X_train = self.cont_vec.transform(text_list)
+        Y_train = self.one_hot_encoder.transform(label_list)
         txt_len = len(text_list)
         indices = list(np.random.permutation(np.arange(txt_len)))
 
         X_train = X_train[indices]
         Y_train = Y_train[indices]
+        start_id = 0
+        while start_id < txt_len:
+            end_id = min(start_id + batch_size, txt_len)
+            batch_X = X_train[start_id: end_id].toarray()
+            batch_Y = Y_train[start_id: end_id].toarray()
+            yield batch_X, batch_Y
+            start_id += batch_size
 
 
-text_list, label_list = clean_data("D:\\NLP_coding\\FudanNLP\\1-SentimentAnalysis\\train.tsv")
-hehe = FeatureExtraction(text_list,[[1],[2],[3],[4],[5]])
-hehe.batch_iter(label_list, text_list, bath_size=32)
-print("ffa")
+# text_list, label_list = clean_data("D:\\NLP_coding\\FudanNLP\\1-SentimentAnalysis\\train.tsv")
+# hehe = FeatureExtraction(text_list,[[1],[2],[3],[4],[5]])
+# hehe.batch_iter(label_list, text_list, batch_size=32)
+# print("ffa")

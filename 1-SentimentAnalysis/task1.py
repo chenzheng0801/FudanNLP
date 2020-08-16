@@ -1,94 +1,96 @@
 from sklearn.feature_extraction.text import CountVectorizer
-import csv
-from nltk.corpus import wordnet
-from nltk import word_tokenize, pos_tag
-from nltk.stem import WordNetLemmatizer
-import csv
+from DataLoader import DataProcess
+from model.ClassficationModel import LrModel
+from datetime import timedelta
+import tensorflow as tf
+import time
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from collections import Counter
-from sklearn import preprocessing
-import math
-
-stopwords = ['i', 'me', 'my', 'myself', 'we', 'our', 'of', "'s",
-                 'ours', 'ourselves', 'you', 'your', 'yours', 'in', 'on',
-                 'yourself', 'yourselves', 'he', 'him', 'his', 'by',
-                 'himself', 'she', 'her', 'to', 'hers', 'herself',
-                 'it', 'its', 'itself', 'they', 'them', 'their', '..',
-                 'theirs', 'themselves', 'what', 'which', 'who', '...',
-                 'whom', 'this', 'that', 'these', 'those', 'am', '\'',
-                 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-                 'have', 'has', 'had', 'having', 'do', 'does', 'with',
-                 'did', 'doing', 'a', 'an', 'the', 'and', ',', '.',
-                 '-s', '-ly', '</s>', 's', ',,', ',,,', "``", "\"",
-                 '\'\'', "\"\"", ":"]
 
 
-def read_tsv(file_path):
-    csv.register_dialect("mydialect", delimiter='\t', quoting=csv.QUOTE_ALL)
-    data_map = {}
-    with open(file_path, ) as csvfile:
-        data = csv.reader(csvfile, 'mydialect')
-        count = 0
-        for line in data:
-            if count > 0:
-                sent_id, phrase, label = line[1], line[2], line[3]
-                ph_len = len(phrase)
-                if sent_id not in data_map.keys():
-                    data_map[sent_id] = (phrase, label, ph_len)
-                else:
-                    t_phrase, t_label, t_len = data_map[sent_id]
-                    if ph_len > t_len:
-                        data_map[sent_id] = (phrase, label, ph_len)
-            count += 1
-    return data_map
-
-def get_wordnet_pos(treebank_tag):
-    if treebank_tag.startswith('J'):
-        return wordnet.ADJ
-    elif treebank_tag.startswith('V'):
-        return wordnet.VERB
-    elif treebank_tag.startswith('N'):
-        return wordnet.NOUN
-    elif treebank_tag.startswith('R'):
-        return wordnet.ADV
-    else:
-        return None
+def get_time_dif(start_time):
+    """获取已经使用的时间"""
+    end_time = time.time()
+    time_dif = end_time-start_time
+    return timedelta(seconds=int(round(time_dif)))
 
 
-def lemmatize_sentence(sentence):
-    res = []
-    lemmatizer = WordNetLemmatizer()
-    for word, pos in pos_tag(word_tokenize(sentence)):
-        wordnet_pos = get_wordnet_pos(pos) or wordnet.NOUN
-        res.append(lemmatizer.lemmatize(word, pos=wordnet_pos))
+def train_by_sklearn():
+    text_list, label_list = DataProcess.clean_data("train.tsv")
+    count_vec = CountVectorizer()
 
-    return res
+    x_train, y_train = text_list, label_list
 
-def data_cleaning(data_map):
-    clean_data = {}
-    for key, value in data_map.items():
-        phrase, label, ph_len = value
-        tokens = lemmatize_sentence(phrase.lower())
-        meaningful_tokens = [token for token in tokens if token not in stopwords]
-        clean_data[key] = (" ".join(meaningful_tokens), label)
-    return clean_data
+    x_count_train = count_vec.fit_transform(x_train)
+    logist = LogisticRegression(penalty="none")
+    logist.fit(x_count_train, y_train)
+    x_test = x_count_train
+    predicted = logist.predict(x_test)
+    print(np.mean(predicted == y_train))
+
+    # logistic = LogisticRegression(penalty="none")
+    # text_list, label_list = DataProcess.clean_data("train.tsv")
+    #
+    # new_label_list = []
+    # for labels in label_list:
+    #     new_label_list.append(labels[0])
+    #
+    # feature_extraction = DataProcess.FeatureExtraction(text_list, label_list)
+    # batch = feature_extraction.batch_iter(new_label_list, text_list, batch_size=8529)
+    # for batch_x, batch_y in batch:
+    #     logistic.fit(batch_x, batch_y)
+    #
+    # x_test = feature_extraction.fit_x(text_list)
+    # y_test = new_label_list
+    # predicted = logistic.predict(x_test)
+    # print(np.mean(predicted == y_test))
 
 
-data_map = read_tsv("train.tsv")
-clean_data = data_cleaning(data_map)
-count_vec = CountVectorizer()
+def evaluate(sess, label_list, text_list, model, feature_extraction):
+    batch = feature_extraction.batch_iter(label_list, text_list, batch_size=128)
+    total = 0
+    total_loss = 0
+    total_acc = 0
+    for batch_data, batch_one_hot in batch:
+        accuracy, loss = sess.run([model.accuracy, model.cross_entropy],
+                                  feed_dict={model.x: batch_data,
+                                             model.y_: batch_one_hot})
+        total_acc += accuracy
+        total_loss += loss
+        total += 1
+    return total_acc/total, total_loss/total
 
-lemma_list = []
-y_train = []
-for _, value in clean_data.items():
-    lemma_phrase, label = value
-    lemma_list.append(lemma_phrase)
-    y_train.append(label)
 
-x_count_train = count_vec.fit_transform(lemma_list)
-logist = LogisticRegression(penalty="none")
-logist.fit(x_count_train, y_train)
-x_test = x_count_train
-predicted = logist.predict(x_test)
-print(np.mean(predicted == y_train))
+def train_tensorflow():
+    text_list, label_list = DataProcess.clean_data("train.tsv")
+    feature_extraction = DataProcess.FeatureExtraction(text_list, label_list)
+    feature_dim = feature_extraction.cont_vec.vocabulary_.__len__()
+    model = LrModel(feature_dim, classes_num=5)
+    epoch_num = 20
+
+    best_acc_val = 0.0
+    start_time = time.time()
+    total_batch = 0
+    saver = tf.train.Saver()
+    print_per_batch = 100
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        for epoch in range(1, epoch_num+1):
+            batch = feature_extraction.batch_iter(label_list, text_list, batch_size=128)
+            for batch_x, batch_y in batch:
+                if total_batch % print_per_batch == 0:
+                    accuracy, loss = evaluate(sess, label_list, text_list, model, feature_extraction)
+                    if accuracy > best_acc_val:
+                        best_acc_val = accuracy
+                        saver.save(sess, "./model.ckpt")
+                    time_diff = get_time_dif(start_time)
+                    print("")
+                    print(time_diff)
+                    print("epoch %d: total batch:%d loss %f, accuracy:%f"
+                          % (epoch, total_batch, loss, accuracy))
+                sess.run(model.train_op, feed_dict={model.x: batch_x, model.y_: batch_y})
+                total_batch += 1
+
+
+train_tensorflow()
+# train_by_sklearn()
