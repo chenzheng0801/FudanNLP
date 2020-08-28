@@ -13,7 +13,7 @@ FLAGS = tf.flags.FLAGS
 tf.flags.DEFINE_string('name', 'default', 'name of the model')
 tf.flags.DEFINE_integer('epoches', 20, 'number of seqs in one batch')
 tf.flags.DEFINE_integer('n_steps', 100, 'length of one seq')
-tf.flags.DEFINE_integer('hidden_size', 128, 'size of hidden state of lstm')
+tf.flags.DEFINE_integer('lstm_size', 128, 'size of hidden state of lstm')
 tf.flags.DEFINE_integer('num_layers', 2, 'number of lstm layers')
 tf.flags.DEFINE_boolean('use_embedding', False, 'whether to use embedding')
 tf.flags.DEFINE_integer('embedding_size', 128, 'size of embedding')
@@ -44,12 +44,13 @@ def main(_):
     g = batch_generator(arr, FLAGS.batch_size, FLAGS.n_steps)
 
     model = CharLSTM(batch_size=FLAGS.batch_size,
-                     hidden_size=FLAGS.hidden_size,
+                     lstm_size=FLAGS.lstm_size,
                      num_layers=FLAGS.num_layers,
                      v_size=converter.vocab_size,
                      learning_rate=FLAGS.learning_rate,
                      grad_clip=FLAGS.grad_clip,
-                     n_steps=FLAGS.n_steps)
+                     n_steps=FLAGS.n_steps,
+                     embedding_size=FLAGS.embedding_size)
     model.train(g, FLAGS.save_every_n,
                 FLAGS.log_every_n, FLAGS.train_keep_prob,
                 FLAGS.epoches, save_path=model_path)

@@ -5,73 +5,79 @@ import os
 
 
 class CharLSTM:
-    def __init__(self, batch_size, num_layers, hidden_size, v_size, learning_rate, grad_clip, n_steps):
+    def __init__(self, batch_size, num_layers, lstm_size, v_size,
+                 learning_rate, grad_clip, n_steps, embedding_size):
         self.batch_size, self.n_steps = batch_size, n_steps
+        self.num_classes = v_size
+        self.grad_clip = grad_clip
+        self.n_steps = n_steps
+        self.grad_clip = grad_clip
+        self.learning_rate = learning_rate
+        self.num_layers = num_layers
+        self.lstm_size = lstm_size
+        self.embedding_size = embedding_size
+        self.build_graph()
 
+    def build_graph(self):
         #输入层
-        with tf.name_scope("inputs"):
-            self.inputs, self.targets, self.keep_prob = self.build_model_input(n_steps, batch_size)
-            embed_vec = tf.Variable(tf.random_normal([v_size, hidden_size],
-                                                     mean=0, stddev=0.3), name="embed_vec")
-            self.embedding = tf.nn.embedding_lookup(embed_vec, self.inputs, name="embedding")
+        self.build_model_input()
+        self.build_lstm_layer()
+        self.build_model_output()
+        self.build_loss()
+        self.build_optimizer()
 
-        with tf.name_scope("lstm_layer"):
-            cell, self.initial_state = self.build_lstm_layer(batch_size, num_layers,
-                                                             hidden_size, self.keep_prob)
-            outputs, state = tf.nn.dynamic_rnn(cell, self.embedding, initial_state=self.initial_state)
-            self.final_state = state
+    def build_lstm_layer(self):
 
-        with tf.name_scope("output_layer"):
-            self.prediction = self.build_output(outputs, hidden_size, v_size)
-
-        self.loss = self.build_loss(self.prediction, v_size)
-        self.train_op = self.build_optimizer(learning_rate, grad_clip)
-
-    def build_lstm_layer(self, batch_size, num_layers, hidden_size, keep_prob):
-
-        def get_a_cell(hidden_size, keep_prob):
-            lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size)
+        def get_a_cell(lstm_size, keep_prob):
+            lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(lstm_size)
             drop_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, output_keep_prob=keep_prob)
             return drop_cell
 
-        cell = tf.nn.rnn_cell.MultiRNNCell(
-            [get_a_cell(hidden_size, keep_prob) for _ in range(num_layers)]
-        )
-        initial_state = cell.zero_state(batch_size, dtype=tf.float32)
-        return cell, initial_state
+        with tf.name_scope("lstm_layer"):
+            cell = tf.nn.rnn_cell.MultiRNNCell(
+                [get_a_cell(self.lstm_size, self.keep_prob) for _ in range(self.num_layers)]
+            )
+            self.initial_state = cell.zero_state(self.batch_size, dtype=tf.float32)
+            self.lstm_outputs, self.final_state = tf.nn.dynamic_rnn(cell, self.lstm_inputs,
+                                                                    initial_state=self.initial_state)
 
-    def build_model_input(self, n_steps, batch_size):
-        inputs = tf.placeholder(dtype=tf.int32, shape=[batch_size, n_steps], name="input")
-        targets = tf.placeholder(dtype=tf.int32, shape=[batch_size, n_steps], name="targets")
-        keep_prob = tf.placeholder(dtype=tf.float32, name="keep_prob")
-        return inputs, targets, keep_prob
+    def build_model_input(self):
+        with tf.name_scope("inputs"):
+            self.inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.n_steps],
+                                         name="input")
+            self.targets = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.n_steps],
+                                          name="targets")
+            self.keep_prob = tf.placeholder(dtype=tf.float32, name="keep_prob")
 
-    def build_output(self, lstm_outputs, hidden_size, v_size):
-        seq_out = tf.concat(lstm_outputs, axis=1)
-        x = tf.reshape(seq_out, [-1, hidden_size])
+            embedding = tf.get_variable('embedding', [self.num_classes, self.embedding_size])
+            self.lstm_inputs = tf.nn.embedding_lookup(embedding, self.inputs)
 
-        with tf.variable_scope("softmax"):
-            softmax_w = tf.Variable(tf.truncated_normal([hidden_size, v_size], stddev=0.1))
-            softmax_b = tf.Variable(tf.zeros(v_size))
+    def build_model_output(self):
+        with tf.name_scope("output_layer"):
+            seq_output = tf.concat(self.lstm_outputs, 1)
+            x = tf.reshape(seq_output, [-1, self.lstm_size])
 
-        logits = tf.matmul(x, softmax_w) + softmax_b
-        prediction = tf.nn.softmax(logits, name='prediction')
-        return prediction
+            with tf.variable_scope('softmax'):
+                softmax_w = tf.Variable(tf.truncated_normal([self.lstm_size, self.num_classes], stddev=0.1))
+                softmax_b = tf.Variable(tf.zeros(self.num_classes))
 
-    def build_loss(self, prediction, v_size):
-        y_one_hots = tf.one_hot(self.targets, v_size)
-        y_one_hots = tf.reshape(y_one_hots, prediction.get_shape())
+            self.logits = tf.matmul(x, softmax_w) + softmax_b
+            self.prediction = tf.nn.softmax(self.logits, name='predictions')
 
-        loss = tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=y_one_hots)
-        loss = tf.reduce_mean(loss)
-        return loss
+    def build_loss(self):
+        with tf.name_scope("loss"):
+            y_one_hots = tf.one_hot(self.targets, self.num_classes)
+            y_one_hots = tf.reshape(y_one_hots, self.prediction.get_shape())
 
-    def build_optimizer(self, learning_rate, grad_clip):
-        optimizer = tf.train.AdamOptimizer(learning_rate)
-        tvars = tf.trainable_variables()
-        grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), grad_clip)
-        train_op = optimizer.apply_gradients(zip(grads, tvars))
-        return train_op
+            loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.prediction, labels=y_one_hots)
+            self.loss = tf.reduce_mean(loss)
+
+    def build_optimizer(self):
+        with tf.name_scope("optimizer"):
+            optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            tvars = tf.trainable_variables()
+            grads, _ = tf.clip_by_global_norm(tf.gradients(self.loss, tvars), self.grad_clip)
+            self.train_op = optimizer.apply_gradients(zip(grads, tvars))
 
     def train(self, batch_generator, save_every_n, log_every_n,
               train_keep_prob, epoches, save_path=None):
@@ -88,7 +94,7 @@ class CharLSTM:
                         self.targets: batch_y,
                         self.keep_prob: train_keep_prob,
                         self.initial_state: new_state}
-                embedding = sess.run([self.embedding], feed_dict=feed)
+                embedding = sess.run([self.lstm_inputs], feed_dict=feed)
                 batch_loss, new_state, _ = sess.run([self.loss,
                                                      self.final_state,
                                                      self.train_op],
