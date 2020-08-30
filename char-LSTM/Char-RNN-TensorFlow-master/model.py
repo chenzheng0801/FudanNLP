@@ -45,9 +45,9 @@ class CharRNN:
     def build_inputs(self):
         with tf.name_scope('inputs'):
             self.inputs = tf.placeholder(tf.int32, shape=(
-                self.num_seqs, self.num_steps), name='inputs')
+                None, None), name='inputs')
             self.targets = tf.placeholder(tf.int32, shape=(
-                self.num_seqs, self.num_steps), name='targets')
+                None, None), name='targets')
             self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
 
             # 对于中文，需要使用embedding层
@@ -70,14 +70,14 @@ class CharRNN:
             cell = tf.nn.rnn_cell.MultiRNNCell(
                 [get_a_cell(self.lstm_size, self.keep_prob) for _ in range(self.num_layers)]
             )
-            self.initial_state = cell.zero_state(self.num_seqs, tf.float32)
+            batch_size = tf.shape(self.inputs)[0]
+            self.initial_state = cell.zero_state(batch_size, tf.float32)
 
             # 通过dynamic_rnn对cell展开时间维度
             self.lstm_outputs, self.final_state = tf.nn.dynamic_rnn(cell, self.lstm_inputs, initial_state=self.initial_state)
 
             # 通过lstm_outputs得到概率
-            seq_output = tf.concat(self.lstm_outputs, 1)
-            x = tf.reshape(seq_output, [-1, self.lstm_size])
+            x = tf.reshape(self.lstm_outputs, [-1, self.lstm_size])
 
             with tf.variable_scope('softmax'):
                 softmax_w = tf.Variable(tf.truncated_normal([self.lstm_size, self.num_classes], stddev=0.1))
@@ -89,7 +89,7 @@ class CharRNN:
     def build_loss(self):
         with tf.name_scope('loss'):
             y_one_hot = tf.one_hot(self.targets, self.num_classes)
-            y_reshaped = tf.reshape(y_one_hot, self.logits.get_shape())
+            y_reshaped = tf.reshape(y_one_hot, [-1, self.num_classes])
             loss = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=y_reshaped)
             self.loss = tf.reduce_mean(loss)
 
@@ -106,7 +106,11 @@ class CharRNN:
             sess.run(tf.global_variables_initializer())
             # Train network
             step = 0
-            new_state = sess.run(self.initial_state)
+            x = np.zeros(shape=(self.num_seqs, 1))
+            feed = {
+                self.inputs: x
+            }
+            new_state = sess.run(self.initial_state, feed_dict=feed)
             for x, y in batch_generator:
                 step += 1
                 start = time.time()

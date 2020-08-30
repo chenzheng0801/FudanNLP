@@ -7,7 +7,7 @@ import codecs
 FLAGS = tf.flags.FLAGS
 
 tf.flags.DEFINE_string('name', 'default', 'name of the model')
-tf.flags.DEFINE_integer('num_seqs', 100, 'number of seqs in one batch')
+tf.flags.DEFINE_integer('num_seqs', 102, 'number of seqs in one batch')
 tf.flags.DEFINE_integer('num_steps', 100, 'length of one seq')
 tf.flags.DEFINE_integer('lstm_size', 128, 'size of hidden state of lstm')
 tf.flags.DEFINE_integer('num_layers', 2, 'number of lstm layers')
